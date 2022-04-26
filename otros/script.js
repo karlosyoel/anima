@@ -9,7 +9,7 @@ container = document.getElementById("canvas_container"),
 timeout_Debounce,
 noise = new SimplexNoise(),
 cameraSpeed = 0,
-blobScale = 3;
+blobScale = 0;
 
 
 init();
@@ -41,7 +41,7 @@ function init() {
     //OrbitControl
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.autoRotate = true;
-    controls.autoRotateSpeed = 0.8;
+    controls.autoRotateSpeed = 0.08;
     controls.maxDistance = 950;
     controls.minDistance = 0;
     controls.enablePan = false;
@@ -63,10 +63,17 @@ function init() {
     nucleus = new THREE.Mesh(icosahedronGeometry, lambertMaterial);
     scene.add(nucleus);
 
+    let icosahedronGeometry1 = new THREE.IcosahedronGeometry(10, 10);
+    var nucleus1 = new THREE.Mesh(icosahedronGeometry1, lambertMaterial);
+    nucleus1.position.setX(10);
+    nucleus1.position.setY(100);
+    scene.add(nucleus1);
+
 
     /*    Sphere  Background   */
     textureSphereBg.anisotropy = 16;
     let geometrySphereBg = new THREE.SphereBufferGeometry(150, 40, 40);
+   
     let materialSphereBg = new THREE.MeshBasicMaterial({
         side: THREE.BackSide,
         map: textureSphereBg,
@@ -101,7 +108,6 @@ function init() {
     starsMaterial.depthWrite = false;  
     stars = new THREE.Points(starsGeometry, starsMaterial);
     scene.add(stars);
-
 
     /*    Fixed Stars   */
     function createStars(texture, size, total) {
