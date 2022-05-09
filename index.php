@@ -14,6 +14,9 @@
 <!-- partial -->
   <script src="./otros/three.min.js" wfd-invisible="true"></script>
 <script src="./otros/OrbitControls.js" wfd-invisible="true"></script>
+
+<script src="https://d3js.org/d3.v4.min.js"></script>
+
 <script src="./otros/simplex-noise.min.js" wfd-invisible="true"></script><script src="./otros/script.js" wfd-invisible="true"></script>
 
 

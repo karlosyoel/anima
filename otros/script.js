@@ -40,11 +40,12 @@ function init() {
 
     //OrbitControl
     controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.autoRotate = true;
+    controls.autoRotate = false;
     controls.autoRotateSpeed = 0.08;
     controls.maxDistance = 950;
     controls.minDistance = 0;
     controls.enablePan = false;
+    controls.enableZoom = false;
 
     const loader = new THREE.TextureLoader();
     const textureSphereBg = loader.load('https://i.ibb.co/4gHcRZD/bg3-je3ddz.jpg');
@@ -58,16 +59,16 @@ function init() {
 
     /*  Nucleus  */   
     texturenucleus.anisotropy = 16;
-    let icosahedronGeometry = new THREE.IcosahedronGeometry(30, 10);
+    let icosahedronGeometry = new THREE.IcosahedronGeometry(0.3, 10);
     let lambertMaterial = new THREE.MeshPhongMaterial({ map: texturenucleus });
     nucleus = new THREE.Mesh(icosahedronGeometry, lambertMaterial);
     scene.add(nucleus);
 
     let lambertMaterial1 = new THREE.MeshPhongMaterial({ map: texturenucleus1 });
-    let icosahedronGeometry1 = new THREE.IcosahedronGeometry(10, 10);
+    let icosahedronGeometry1 = new THREE.IcosahedronGeometry(0.1, 10);
     var nucleus1 = new THREE.Mesh(icosahedronGeometry1, lambertMaterial1);
-    nucleus1.position.setX(30);
-    nucleus1.position.setY(50);
+    nucleus1.position.setX(0.3);
+    nucleus1.position.setY(0.5);
     scene.add(nucleus1);
 
 
@@ -80,23 +81,23 @@ function init() {
         map: textureSphereBg,
     });
     sphereBg = new THREE.Mesh(geometrySphereBg, materialSphereBg);
-    scene.add(sphereBg);
+    // scene.add(sphereBg);
 
 
     /*    Moving Stars   */
     let starsGeometry = new THREE.Geometry();
 
-    for (let i = 0; i < 50; i++) {
-        let particleStar = randomPointSphere(150); 
+    // for (let i = 0; i < 50; i++) {
+    //     let particleStar = randomPointSphere(150); 
 
-        particleStar.velocity = THREE.MathUtils.randInt(50, 200);
+    //     particleStar.velocity = THREE.MathUtils.randInt(50, 200);
 
-        particleStar.startX = particleStar.x;
-        particleStar.startY = particleStar.y;
-        particleStar.startZ = particleStar.z;
+    //     particleStar.startX = particleStar.x;
+    //     particleStar.startY = particleStar.y;
+    //     particleStar.startZ = particleStar.z;
 
-        starsGeometry.vertices.push(particleStar);
-    }
+    //     starsGeometry.vertices.push(particleStar);
+    // }
 
     let starsMaterial = new THREE.PointsMaterial({
         size: 5,
@@ -126,9 +127,9 @@ function init() {
         }
         return new THREE.Points(pointGeometry, pointMaterial);
     }
-    scene.add(createStars(texture1, 15, 20));   
-    scene.add(createStars(texture2, 5, 5));
-    scene.add(createStars(texture4, 7, 5));
+    scene.add(createStars(texture1, 2, 50));   
+    scene.add(createStars(texture2, 3, 20));
+    scene.add(createStars(texture4, 15, 15));
 
 
     function randomPointSphere (radius) {
@@ -162,21 +163,21 @@ function animate() {
 
 
     //Nucleus Animation
-    nucleus.geometry.vertices.forEach(function (v) {
-        let time = Date.now();
-        v.normalize();
-        let distance = nucleus.geometry.parameters.radius + noise.noise3D(
-            v.x + time * 0.0005,
-            v.y + time * 0.0003,
-            v.z + time * 0.0008
-        ) * blobScale;
-        v.multiplyScalar(distance);
-    })
-    nucleus.geometry.verticesNeedUpdate = true;
-    nucleus.geometry.normalsNeedUpdate = true;
-    nucleus.geometry.computeVertexNormals();
-    nucleus.geometry.computeFaceNormals();
-    nucleus.rotation.y += 0.002;
+    // nucleus.geometry.vertices.forEach(function (v) {
+    //     let time = Date.now();
+    //     v.normalize();
+    //     let distance = nucleus.geometry.parameters.radius + noise.noise3D(
+    //         v.x + time * 0.0005,
+    //         v.y + time * 0.0003,
+    //         v.z + time * 0.0008
+    //     ) * blobScale;
+    //     v.multiplyScalar(distance);
+    // })
+    // nucleus.geometry.verticesNeedUpdate = true;
+    // nucleus.geometry.normalsNeedUpdate = true;
+    // nucleus.geometry.computeVertexNormals();
+    // nucleus.geometry.computeFaceNormals();
+    nucleus.rotation.y -= 0.002;
 
 
     //Sphere Beckground Animation
@@ -192,18 +193,95 @@ function animate() {
 }
 
 
-
 /*     Resize     */
-window.addEventListener("resize", () => {
-    clearTimeout(timeout_Debounce);
-    timeout_Debounce = setTimeout(onWindowResize, 80);
-});
-function onWindowResize() {
-    camera.aspect = container.clientWidth / container.clientHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(container.clientWidth, container.clientHeight);
-}
+// window.addEventListener("resize", () => {
+//     clearTimeout(timeout_Debounce);
+//     timeout_Debounce = setTimeout(onWindowResize, 80);
+// });
+// function onWindowResize() {
+//     camera.aspect = container.clientWidth / container.clientHeight;
+//     camera.updateProjectionMatrix();
+//     renderer.setSize(container.clientWidth, container.clientHeight);
+// }
 
+// container.onwheel = (event) =>{
+//     console.log("ss");
+//     var factor = 15;
+//     var mX = (event.clientX / container.clientWidth) * 2 - 1;
+//     var mY = -(event.clientY / container.clientHeight) * 2 + 1;
+//     var vector = new THREE.Vector3(mX, mY, 0.1);
+//     vector.unproject(camera);
+//     vector.sub(camera.position);
+//     if (event.deltaY < 0) {
+//        camera.position.addVectors(camera.position, vector.setLength(factor));
+//        controls.target.addVectors(controls.target, vector.setLength(factor));
+//     } else {
+//        camera.position.subVectors(camera.position, vector.setLength(factor));
+//        controls.target.subVectors(controls.target, vector.setLength(factor));
+//     }
+// };
+
+const width = 960;
+const height = 500;
+const zoom = d3.zoom()
+  .scaleExtent([0, 1000])
+  .on('zoom', () => {
+    const event = d3.event;
+    if (event.sourceEvent) {
+
+      // Get z from D3
+      const new_z = event.transform.k;
+     
+      if (new_z !== camera.position.z) {
+        
+        // Handle a zoom event
+        const { clientX, clientY } = event.sourceEvent;
+
+        // Project a vector from current mouse position and zoom level
+        // Find the x and y coordinates for where that vector intersects the new
+        // zoom level.
+        // Code from WestLangley https://stackoverflow.com/questions/13055214/mouse-canvas-x-y-to-three-js-world-x-y-z/13091694#13091694
+        const vector = new THREE.Vector3(
+          clientX / width * 2 - 1,
+          - (clientY / height) * 2 + 1,
+          1 
+        );
+        vector.unproject(camera);
+        const dir = vector.sub(camera.position).normalize();
+        const distance = (new_z - camera.position.z)/dir.z;
+        const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+        
+        // Set the camera to new coordinates
+        camera.position.set(pos.x, pos.y, new_z);
+
+      } else {
+
+        // Handle panning
+        const { movementX, movementY } = event.sourceEvent;
+
+        // Adjust mouse movement by current scale and set camera
+        const current_scale = getCurrentScale();
+        camera.position.set(camera.position.x - movementX/current_scale, camera.position.y +
+          movementY/current_scale, camera.position.z);
+      }
+    }
+  });
+
+  function getCurrentScale() {
+    var vFOV = camera.fov * Math.PI / 180
+    var scale_height = 2 * Math.tan( vFOV / 2 ) * camera.position.z
+    var currentScale = height / scale_height
+    return currentScale
+  }
+// Add zoom listener
+const view = d3.select(renderer.domElement);
+view.call(zoom);
+
+// Disable double click to zoom because I'm not handling it in Three.js
+view.on('dblclick.zoom', null);
+
+// Sync d3 zoom with camera z position
+zoom.scaleTo(view, 125);
 
 
 /*     Fullscreen btn     */

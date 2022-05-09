@@ -1,0 +1,19 @@
+{
+    "packages": [
+        {
+            "name": "mrdoob/three.js",
+            "version": "0.139.1",
+            "version_normalized": "0.139.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/mrdoob/three.js",
+                "reference": "origin/dev"
+            },
+            "type": "library",
+            "installation-source": "source",
+            "install-path": "../mrdoob/three.js"
+        }
+    ],
+    "dev": true,
+    "dev-package-names": []
+}
