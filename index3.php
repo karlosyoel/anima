@@ -24,11 +24,22 @@ if(!$cid){
 			a {
 				color: #08f;
 			}
+			#control{
+				position: absolute;
+				max-height: 100%;
+				overflow: scroll;
+				background-color: #00000059;
+				padding: 15px;
+				color: white;
+				text-transform: capitalize;
+			}
 		</style>
 	</head>
 
 	<body>
-
+		<div id="control">
+			
+		</div>
 		<!-- Import maps polyfill -->
 		<!-- Remove this when import maps will be widely supported -->
 		<script async src="./otros/es-module-shims.js"></script>
@@ -49,14 +60,10 @@ if(!$cid){
 			// import Stats from './vendor/mrdoob/three.js/examples/jsm/libs/stats.module.js';
 
 			import { OrbitControls } from './vendor/mrdoob/three.js/examples/jsm/controls/OrbitControls.js';
-			import { Gyroscope } from './vendor/mrdoob/three.js/examples/jsm/misc/Gyroscope.js';
-			import { MD2CharacterComplex } from './vendor/mrdoob/three.js/examples/jsm/misc/MD2CharacterComplex.js';
-
 			
 			import { GLTFLoader } from './vendor/mrdoob/three.js/examples/jsm/loaders/GLTFLoader.js';
+			import { GLTFExporter } from './vendor/mrdoob/three.js/examples/jsm/exporters/GLTFExporter.js';
 			import * as SkeletonUtils from './vendor/mrdoob/three.js/examples/jsm/utils/SkeletonUtils.js';
-
-			import { FBXLoader } from './vendor/mrdoob/three.js/examples/jsm/loaders/FBXLoader.js';
 
 			// import {_ws} from './otros/events.js'
 
@@ -66,127 +73,18 @@ if(!$cid){
 			let container, stats;
 			let camera, scene, renderer;
 
-			const characters = [];
-			let nCharacters = 0;
-
 			let cameraControls;
 			var character;
-
-			const controlsAll = {
-
-				moveForward: false,
-				moveBackward: false,
-				moveLeft: false,
-				moveRight: false
-
-			};
 			
-			const controlsOgro = {
-
-				moveForward: false,
-				moveBackward: false,
-				moveLeft: false,
-				moveRight: false
-
-			};
-
-			var worldBox = new THREE.Box3();
-			var characterPos;
-			var gyro;
-			const clock = new THREE.Clock();
-			var mapSize = 16000;
-
-			var ground;
-			var light;
-
-
-			// let camera, scene, renderer, controls;
-
-			const objects = [];
-
-			let raycaster;
-
-			let moveForward = false;
-			let moveBackward = false;
-			let moveLeft = false;
-			let moveRight = false;
-			let canJump = false;
-
-			let prevTime = performance.now();
-			const velocity = new THREE.Vector3();
-			const direction = new THREE.Vector3();
-			const vertex = new THREE.Vector3();
-			const color = new THREE.Color();
-
-			let characterBox = new THREE.Box3();
-			var characterLastPosition = new THREE.Vector3();
-			var goinBack = false;
-
-			
-			var playerCollider;
-
-			//SOLDIERS
 			var mixers;
-			var userList = [];
-
-			var auxWs = false;
+			var light,gltfMain;
 			const loader = new GLTFLoader();
-			var gltfMain;
-
+			var faceExpres,faceValue;
+			var avatar,head, body, pelo;
+			var colorPiel = {r:.420,g:.272,b:.179}
+			var colorPelo = {r:.0,g:.272,b:.0}
 			init();
 			animate();
-
-
-			function connectService(){
-				var host = 'ws://127.0.0.1:12345/ws.php';
-				var _ws = new WebSocket(host);
-
-				_ws.onclose = ()=>{
-					console.log("Connection is closed...");
-					connectService();
-				}
-
-				_ws.onmessage = function (evt) { 
-					var msg = JSON.parse(evt.data);
-
-					if(msg){
-						switch(msg['op']){
-							case 'up':{
-								var id = msg['uid'];
-
-								var el = userList[id];
-								if(!el){
-									userList[id] = "w";
-									addUser(msg);								
-									wait(msg);								
-								}else{
-									moveUser(msg);
-								}
-								
-								break;
-							}
-							case 'disc':{
-								var id = msg['uid'];
-								console.log(msg)
-								if(userList[id]){
-									// console.log(msg)
-									removeObject3D(userList[id]._root);
-								}
-								break;
-							}
-						}
-					}
-					// console.log(msg);
-				};
-
-				_ws.onopen = function(e) {
-					var delta = clock.getDelta();
-					updateMovementModel( delta,mixers,controlsAll )
-					sendPosition(delta);
-				};
-
-				auxWs = _ws;
-			}
 
 			function init() {
 
@@ -195,10 +93,8 @@ if(!$cid){
 
 				// CAMERA				
 				camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 1000 );
-				camera.position.set( 0, 5.50, 13.00 );
-				// camera.position.set( 2, 3, - 6 );
-				// camera.lookAt( 0, 1, 0 );
-
+				camera.position.set( 0, 1,45 );
+				// camera.lookAt( 0, 10, 0 );
 				// SCENE
 				scene = new THREE.Scene();
 				scene.background = new THREE.Color( 0xffffff );
@@ -239,556 +135,252 @@ if(!$cid){
 				dirLight.shadow.camera.far = 40;
 				scene.add( dirLight );
 
-				raycaster = new THREE.Raycaster();	
-
-				//  GROUND
-				initGround();
-
 				// RENDERER
 				renderer = new THREE.WebGLRenderer( { antialias: true } );
 				renderer.setPixelRatio( window.devicePixelRatio );
 				renderer.setSize( SCREEN_WIDTH, SCREEN_HEIGHT );
-				// renderer.sortObjects = true;
-				// renderer.physicallyCorrectLights = true;
+				
 				container.appendChild( renderer.domElement );
 
 				renderer.outputEncoding = THREE.sRGBEncoding;
 				renderer.shadowMap.enabled = true;
-				// renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-				// STATS
-				// stats = new Stats();
-				// container.appendChild( stats.dom );
-
+				
 				// CONTROLS
 				cameraControls = new OrbitControls( camera, renderer.domElement );
-				cameraControls.maxDistance = 8.00;
-				cameraControls.minDistance = 4.50;
-				cameraControls.maxPolarAngle = Math.PI * 0.45;
-				cameraControls.minPolarAngle = 0;
+				cameraControls.target.x = 0;
+				cameraControls.target.y = 1.5;
+				cameraControls.target.z = 0;
+				cameraControls.maxDistance = 5.00;
+				cameraControls.minDistance = 2;
+				// cameraControls.maxPolarAngle = Math.PI * 0.45;
+				// cameraControls.minPolarAngle = 0;
 				// cameraControls.rotateSpeed = 0.4;
-				cameraControls.minAzimuthAngle = Math.PI *0.5;
+				// cameraControls.minAzimuthAngle = Math.PI *0.5;
 				// cameraControls.maxAzimuthAngle = Math.PI *0.5;
 				cameraControls.update();
 
 				// initAvatar2();
-				initAvatar1();
+				initFace();
 				initEvents();
 				// initBoxes();
 			}
 
-			function updatePlayer( deltaTime ) {
-				
-				playerCollider.set(mixers._root.position,playerCollider.radius);
-
-				// raycaster.setFromCamera( character.root.position, camera );
-
-				raycaster.ray.origin.copy(mixers._root.position);
-
-				var dir = new THREE.Vector3();
-				
-				mixers._root.getWorldDirection(dir);
-				// dir.multiplyScalar(100);
-				// if(goinBack){
-				dir.multiplyScalar(-1);
-				// }
-				raycaster.ray.direction.copy(dir);
-				raycaster.far = 200;
-				
-				const intersects = raycaster.intersectObjects(objects);
-				
-				if(!intersects.length){
-					characterLastPosition.copy(mixers._root.position);
-				}else{
-					// console.log(intersects)
-					mixers._root.position.copy(characterLastPosition);
-				}
-				if(mixers._root.userData.speed>0){
-					sendPosition(deltaTime);
-				}
-			}
-			
-			function wait(msg){
-				setTimeout(()=>{
-					if(userList[msg['uid']] == "w")
-						wait(msg);
-					else{
-						moveUser(msg);
-					}
-				},1000)
-			}
-
-			function moveUser(msg){
-				var el = userList[msg['uid']];
-				if(el!="w"){
-					el._root.position.x = msg['x'];
-					el._root.position.y = msg['y'];
-					el._root.position.z = msg['z'];
-					// const delta = clock.getDelta();	
-					updateMovementModel(msg['delta'],el,msg['control']);
-				}
-			}
-
-			const sendPosition = (delta)=>{
-				if(auxWs.readyState!=1){
-					return;
-				}
-				var mouseP = {
-					x:mixers._root.position.x,
-					y:mixers._root.position.y,
-					z:mixers._root.position.z,
-					dir:mixers._root.rotation.y,
-					uid:cid,
-					op:'up',
-					control:controlsAll,
-					delta:delta
-				};
-				auxWs.send(JSON.stringify(mouseP));
-				// console.log(mouseP)
-			}
-
-			//events
-
-			function initBoxes(){
-				const boxGeometry = new THREE.BoxGeometry( 20, 20, 20 ).toNonIndexed();
-				let position = boxGeometry.attributes.position;
-				const colorsBox = [];
-
-				for ( let i = 0, l = position.count; i < l; i ++ ) {
-
-					color.setHSL( Math.random() * 0.3 + 0.5, 0.75, Math.random() * 0.25 + 0.75 );
-					colorsBox.push( color.r, color.g, color.b );
-
-				}
-
-				boxGeometry.setAttribute( 'color', new THREE.Float32BufferAttribute( colorsBox, 3 ) );
-
-				for ( let i = 0; i < 500; i ++ ) {
-
-					const boxMaterial = new THREE.MeshPhongMaterial( { specular: 0xffffff, flatShading: true, vertexColors: true } );
-					boxMaterial.color.setHSL( Math.random() * 0.2 + 0.5, 0.75, Math.random() * 0.25 + 0.75 );
-
-					const box = new THREE.Mesh( boxGeometry, boxMaterial );
-					box.position.x = Math.floor( Math.random() * 20 - 10 ) * 100;
-					box.position.y = 10;
-					box.position.z = Math.floor( Math.random() * 20 - 10) * 100;
-
-					box.castShadow = true;
-					box.receiveShadow = true;
-
-					scene.add( box );
-					objects.push(box);
-				}
-			}
-
-			function removeObject3D(object3D) {
-				if (!(object3D instanceof THREE.Object3D)) return false;
-
-				if(object3D instanceof THREE.Mesh)
-					object3D.geometry.dispose();
-
-				if(object3D.material){
-					if (object3D.material instanceof Array) {
-						object3D.material.forEach(material => material.dispose());
-					} else {
-						object3D.material.dispose();
-					}
-				}
-				var p = object3D.name;
-				object3D.removeFromParent();
-				
-				userList = userList.filter(function(value, index, arr){ 
-					return value != p;
-				});
-				return true;
-			}
-
-			function addUser(msg){
-				if(userList[msg['uid']]!="w"){
-					return;
-				}
-				// const loader = new GLTFLoader();
-				//aqui se debe pasar que elemento va a cargar
-				loader.load( './vendor/mrdoob/three.js/examples/models/gltf/Soldier.glb', function ( gltf ) {
-
-					gltf.scene.traverse( function ( object ) {
-
-						if ( object.isMesh ) {
-							object.castShadow = true;
-						}
-
-					} );
-					
-					const model1 = SkeletonUtils.clone( gltf.scene );
-
-					var mixersAux = new THREE.AnimationMixer( model1 );
-					var anima1 = mixersAux.clipAction( gltf.animations[0]).play();
-					var anima2 = mixersAux.clipAction( gltf.animations[1]);
-					model1.position.x = msg['x'];
-					model1.position.y = msg['y'];
-					model1.position.z = msg['z'];
-					model1.rotation.y = msg['dir'];
-
-					// model1.rotation.y = -3;
-					model1.userData.animationFPS = 6;
-					model1.userData.transitionFrames = 15;
-
-					// movement model parameters
-					model1.userData.maxSpeed = 105;
-					model1.userData.maxReverseSpeed = - 105;
-					model1.userData.frontAcceleration = 600;
-					model1.userData.backAcceleration = 600;
-					model1.userData.frontDecceleration = 600;
-					model1.userData.angularSpeed = 2.5;
-					model1.userData.speed = 0;
-					model1.userData.bodyOrientation = model1.rotation.y;
-					model1.userData.walkSpeed = model1.userData.maxSpeed;
-					model1.userData.crouchSpeed = 175;
-					model1.userData.animations = [anima1,anima2];
-
-					model1.scale.multiplyScalar(30);//(100,100,100);
-
-					model1.name = msg['uid'];
-					
-					userList[msg['uid']] = mixersAux;
-					scene.add( model1 );
-					
-					
-					// playerCollider = new THREE.Sphere(mixers._root.position, 50 );
-					// characterLastPosition.copy(mixers._root.position);
-				} );
-			}
-
-			function initAvatar2(){
-				const loader = new FBXLoader();
-				loader.load( './models/glb/untitled1.fbx', function ( object ) {
-					console.log(object)
-					mixers = new THREE.AnimationMixer( object );
-					
-					const action = mixers.clipAction( object.animations[ 0 ] );
-					action.play();
-
-					var anima2 = object.animations[ 0 ];
-
-					object.traverse( function ( child ) {
-
-						if ( child.isMesh ) {
-
-							child.castShadow = true;
-							child.receiveShadow = true;
-
-						}
-
-					} );
-
-					// gyro = new Gyroscope();
-					// gyro.add( camera );
-					// gyro.add( light, light.target );
-					// object.add( gyro );
-					// object.scale.set(.01, .01, .01);
-					// console.log(object);
-					mixers._root = object;
-					scene.add( object );
-
-					function initAvatar3(anima2){
-						const loader = new FBXLoader();
-						loader.load( './models/glb/08b9a614-37fa-4d72-a2b2-55f8d4385fae.fbx', function ( object ) {
-						// console.log(object)
-						var mixer1 = new THREE.AnimationMixer( object );
-						const action = mixer1.clipAction( anima2 );
-						action.play();
-
-						// mixers._root.userData.animations.anima2 = object.animations[ 0 ];
-
-						object.traverse( function ( child ) {
-
-							if ( child.isMesh ) {
-
-								child.castShadow = true;
-								child.receiveShadow = true;
-
-							}
-
-						} );
-						
-						scene.add( object );
-
-					} );
-					}
-				} );
-
-				
-			}
-
-			function initAvatar1(){
-				const texture = new THREE.TextureLoader().load("./models/glb/Wolf3D_Avatar_Diffuse.png");
-				texture.encoding = THREE.sRGBEncoding;
+			function initFace(){
+				var mylist = document.getElementById('control');
+				var face = 0;
+				var all = {}
 				// loader.load( './vendor/mrdoob/three.js/examples/models/gltf/Soldier.glb', function ( gltf ) {
-				loader.load( './models/glb/modelo.gltf', function ( gltf ) {
+				loader.load( './models/glb/head.glb', function ( gltf ) {
 				// loader.load( './models/glb/Runningx24.glb', function ( gltf ) {
 
 					gltf.scene.traverse( function ( object ) {
 
-						if ( object.isMesh ) {
-							object.castShadow = true;
-							object.material.metalness = 0;
-							object.material.vertexColors = false;
-							texture.flipY = false;
-							object.material.map = texture;
-
-							if (object.morphTargetDictionary){
-								object.morphTargetDictionary.mouthSmile = 0;
-							} 
+						if ( object.isMesh) {
+							switch(object.name){
+								case 'Wolf3D_Head_1':{
+									var texture = new THREE.TextureLoader().load("./models/glb/face_mask_AO_female.jpg");
+									texture.flipY = false;
+									texture.encoding = THREE.sRGBEncoding;
+									object.material.map = texture;
+									object.material.color.r = colorPiel.r;
+									object.material.color.g = colorPiel.g;
+									object.material.color.b = colorPiel.b;
+									
+									if (object.morphTargetDictionary){
+										faceExpres = Object.keys(object.morphTargetDictionary);
+										faceValue =  object.morphTargetInfluences;
+										
+										object.morphTargetInfluences[object.morphTargetDictionary['AAA_neck']] = 1;
+										object.morphTargetInfluences[object.morphTargetDictionary['Disney_neck_thin']] = 0.3;
+										object.morphTargetInfluences[object.morphTargetDictionary['faceShape10']] = 1;
+										object.morphTargetInfluences[object.morphTargetDictionary['faceShape08']] = 1;
+										object.morphTargetInfluences[object.morphTargetDictionary['Disney_nose_small']] = 0.7;
+										object.morphTargetInfluences[object.morphTargetDictionary['lipShape01']] = 0.7;
+										object.morphTargetInfluences[object.morphTargetDictionary['shape_022']] = 0.3;
+										object.morphTargetInfluences[object.morphTargetDictionary['FRT_nose_2']] = 1;
+										object.morphTargetInfluences[object.morphTargetDictionary['FRT_eyebrows']] = 1;
+										object.morphTargetInfluences[object.morphTargetDictionary['FRT_eyes']] = 1;
+										object.morphTargetInfluences[object.morphTargetDictionary['FRT_cheeks_2']] = 1;
+										object.morphTargetInfluences[object.morphTargetDictionary['AAA_chin']] = 1;
+										object.morphTargetInfluences[object.morphTargetDictionary['eyeShape06']] = 1;
+										object.morphTargetInfluences[object.morphTargetDictionary['eyeShape10']] = 1;
+										object.morphTargetInfluences[object.morphTargetDictionary['noseShape02']] = 0.81;
+										object.morphTargetInfluences[object.morphTargetDictionary['lipShape07']] = 1;
+										// console.log(object.morphTargetInfluences);
+										// console.log(object);
+										for(var i =0; i<faceExpres.length;i++){
+											all [faceExpres[i]] = faceValue[i];
+											var el = faceExpres[i]+':<br> <input type="range" id="'+faceExpres[i]+'" data-index='+i+' data-face='+face+' max=1 min=0 value='+faceValue[i]+' step=0.01><br>';
+											mylist.insertAdjacentHTML('beforeend', el);
+											document.getElementById(faceExpres[i]).addEventListener("input",(e)=>{
+												e = e.srcElement;
+												head.children[0].children[e.dataset.face].morphTargetInfluences[e.dataset.index] = e.value;
+											})
+										}
+										face++;							
+									} 
+									break;
+								}
+								case 'Wolf3D_Head_2':{
+									var texture = new THREE.TextureLoader().load("./models/glb/1626452485-eye-12-mask.jpg");
+									texture.flipY = false;
+									texture.encoding = THREE.sRGBEncoding;
+									object.material.map = texture;
+									break;
+								}
+							}
+							// console.log(object.material);							
 						}
-
 					} );
-					gltfMain = gltf;
-					const model1 = SkeletonUtils.clone( gltfMain.scene );
-					// return initAvatar();
-					mixers = new THREE.AnimationMixer( model1 );
+					// gltfMain = gltf;
+					head = gltf.scene;//SkeletonUtils.clone( gltf.scene );
+					// mixers = new THREE.AnimationMixer( head );
+					head.position.x = -0.015;
+					head.position.z = -0.001;
+					head.position.y = 1.435;
 
-					// mixers._actions = gltf.animations;
-					// mixers.clipAction( mixers._actions[0]).play(); // idle
-					var anima1 = mixers.clipAction( gltfMain.animations[0]).play();
-					var anima2 = mixers.clipAction( gltfMain.animations[2]);
-					var anima3 = mixers.clipAction( gltfMain.animations[1]);
-					model1.position.x = 10;
-					model1.position.z = 50;
-
-					// model1.rotation.y = -3;
-					model1.userData.animationFPS = 160;
-					model1.userData.transitionFrames = 150;
-
-					// movement model parameters
-					model1.userData.maxSpeed = 250;
-					model1.userData.maxReverseSpeed = - 105;
-					model1.userData.frontAcceleration = 600;
-					model1.userData.backAcceleration = 600;
-					model1.userData.frontDecceleration = 600;
-					model1.userData.angularSpeed = 2.5;
-					model1.userData.speed = 0;
-					model1.userData.bodyOrientation = model1.rotation.y;
-					model1.userData.walkSpeed = 50;
-					model1.userData.crouchSpeed = model1.userData.maxSpeed;
-					model1.userData.animations = [anima1,anima2,anima3];
-					// model1.userData.animations = [anima1,anima3];
-
-					model1.scale.multiplyScalar(30);//(100,100,100);
-					scene.add( model1 );
-					
-					gyro = new Gyroscope();
-					gyro.add( camera );
-					gyro.add( light, light.target );
-					model1.add( gyro );
-					
-					// console.log(anima1.isRunning());
-					// mixers._activateAction(1)
-					// animate();
-					playerCollider = new THREE.Sphere(mixers._root.position, 50 );
-					characterLastPosition.copy(mixers._root.position);
-
-					// initAvatar();
-					// connectService();
+					// head.scale.multiplyScalar(9);//(100,100,100);
+					// scene.add( head );
+					initBody();
 				} );
 			}
 
-			function initAvatar(){
-				const texture = new THREE.TextureLoader().load("./models/glb/Wolf3D_Avatar_Diffuse.png");
-				loader.load( './models/glb/modelo_solo.gltf', function ( gltf ) {
+			function initBody(){
+				var face = 0;
+				var all = {}
+				// loader.load( './vendor/mrdoob/three.js/examples/models/gltf/Soldier.glb', function ( gltf ) {
+				loader.load( './models/glb/1648628681-outfit-rogue-01-v2-f.glb', function ( gltf ) {
 				// loader.load( './models/glb/Runningx24.glb', function ( gltf ) {
 
 					gltf.scene.traverse( function ( object ) {
 
-						if ( object.isMesh ) {
-							object.castShadow = true;
-							object.material.metalness = 0;
-							object.material.vertexColors = false;
-							texture.flipY = false;
-							object.material.map = texture;
-
-							if (object.morphTargetDictionary){
-								object.morphTargetDictionary.mouthSmile = 0;
-								// console.log(object.morphTargetDictionary);
-								// object.morphTargetDictionary.
-							} 
+						if ( object.isMesh) {
+							if (object.type == 'SkinnedMesh' && object.name=='Wolf3D_Body') {
+								// let bones = SkeletonUtils.getBones(object.skeleton);
+								// skeleton = new THREE.Skeleton(bones);
+							}
+							
+							switch(object.name){
+								case 'Wolf3D_Head_1':{
+									var texture = new THREE.TextureLoader().load("./models/glb/face_mask_AO_female.jpg");
+									texture.flipY = false;
+									texture.encoding = THREE.sRGBEncoding;
+									object.material.map = texture;
+									if (object.morphTargetDictionary){
+										faceExpres = Object.keys(object.morphTargetDictionary);
+										faceValue =  object.morphTargetInfluences;
+										
+										// object.morphTargetInfluences[11] = 1;
+										// console.log(object.morphTargetInfluences);
+										// console.log(object);
+										for(var i =0; i<faceExpres.length;i++){
+											all [faceExpres[i]] = faceValue[i];
+											var el = faceExpres[i]+':<br> <input type="range" id="'+faceExpres[i]+'" data-index='+i+' data-face='+face+' max=1 min=0 value='+faceValue[i]+' step=0.01><br>';
+											mylist.insertAdjacentHTML('beforeend', el);
+											document.getElementById(faceExpres[i]).addEventListener("input",(e)=>{
+												e = e.srcElement;
+												mixers._root.children[0].children[e.dataset.face].morphTargetInfluences[e.dataset.index] = e.value;
+											})
+										}
+										face++;							
+									} 
+									break;
+								}
+								case 'Wolf3D_Body':{
+									object.material.color.r = colorPiel.r;
+									object.material.color.g = colorPiel.g;
+									object.material.color.b = colorPiel.b;
+									break;
+								}
+							}						
 						}
-
 					} );
-				gltf.animations = gltfMain.animations;
-				const model1 = SkeletonUtils.clone( gltf.scene );
-				console.log(gltf)
-				mixers = new THREE.AnimationMixer( model1 );
-				mixers._root.animations = gltfMain.animations;
-				// mixers._actions = gltf.animations;
-				// mixers.clipAction( mixers._actions[0]).play(); // idle
-				var anima1 = mixers.clipAction( gltfMain.animations[0]).play();
-				// var anima2 = mixers.clipAction( gltfMain.animations[2]);
-				var anima3 = mixers.clipAction( gltfMain.animations[1]);
-				model1.position.x = 100;
-				model1.position.z = 50;
+					body = gltf.scene;					
+					body.position.x = 0;
+					body.position.z = 0;
+					body.position.y = 0;
 
-				console.log(model1,"2");
-				// model1.rotation.y = -3;
-				model1.userData.animationFPS = 6;
-				model1.userData.transitionFrames = 15;
+					// body.scale.multiplyScalar(10);
 
-				// movement model parameters
-				model1.userData.maxSpeed = 105;
-				model1.userData.maxReverseSpeed = - 105;
-				model1.userData.frontAcceleration = 600;
-				model1.userData.backAcceleration = 600;
-				model1.userData.frontDecceleration = 600;
-				model1.userData.angularSpeed = 2.5;
-				model1.userData.speed = 0;
-				model1.userData.bodyOrientation = model1.rotation.y;
-				model1.userData.walkSpeed = model1.userData.maxSpeed;
-				model1.userData.crouchSpeed = 175;
-				// model1.userData.animations = [anima1,anima2,anima3];
-				model1.userData.animations = [anima1,anima3];
-
-				// console.log(mixers)
-				// mixers = mixers1;
-
-				model1.scale.multiplyScalar(30);//(100,100,100);
-				scene.add( model1 );
-				
-				gyro = new Gyroscope();
-				gyro.add( camera );
-				gyro.add( light, light.target );
-				model1.add( gyro );
-			});
-				// console.log(anima1.isRunning());
-				// mixers._activateAction(1)
-				// animate();
-				// playerCollider = new THREE.Sphere(mixers._root.position, 50 );
-				// characterLastPosition.copy(mixers._root.position);
-
-				// initAvatar();
-				// connectService();
-				
-
-				// const configOgro = {
-
-				// baseUrl: './vendor/mrdoob/three.js/examples/models/md2/ogro/',
-
-				// body: 'ogro.md2',
-				// skins: [ 'grok.jpg', 'ogrobase.png', 'arboshak.png', 'ctf_r.png', 'ctf_b.png', 'darkam.png', 'freedom.png',
-				// 		'gib.png', 'gordogh.png', 'igdosh.png', 'khorne.png', 'nabogro.png',
-				// 		'sharokh.png' ],
-				// weapons: [[ 'weapon.md2', 'weapon.jpg' ]],
-				// animations: {
-				// 	move: 'run',
-				// 	idle: 'stand',
-				// 	jump: 'jump',
-				// 	attack: 'attack',
-				// 	crouchMove: 'cwalk',
-				// 	crouchIdle: 'cstand',
-				// 	crouchAttach: 'crattack'
-				// },
-
-				// walkSpeed: 105.0,
-				// crouchSpeed: 175
-
-				// };
-
-				// const nRows = 1;
-				// const nSkins = 1;
-
-				// character = new MD2CharacterComplex();
-				// // character.scale = 1;
-				// character.controls = controlsOgro;
-
-				// var character1 = new MD2CharacterComplex();
-				// // character1.scale = 3;
-				// // character1.controls = controlsAll;
-
-				// characterPos = new THREE.Vector3();
-
-				// const baseCharacter = new MD2CharacterComplex();
-				// // baseCharacter.scale = 3;
-
-				// baseCharacter.onLoadComplete = function () {
-
-				// 	character.shareParts( baseCharacter );
-
-				// 	// cast and receive shadows
-				// 	character.enableShadows( true );
-
-				// 	character.setWeapon( 0 );
-				// 	character.setSkin( 5 );
-
-				// 	character.root.position.x = 0;//( i - nSkins / 2 ) * 150;
-				// 	character.root.position.z = 0;//j * 250;
-				// 	scene.add( character.root );
-
-				// 	character1.shareParts( baseCharacter );
-				// 	character1.enableShadows( true );
-
-				// 	character1.setWeapon( 1 );
-				// 	character1.setSkin( 2 );
-
-				// 	character1.root.position.x = -450;
-				// 	character1.root.position.z = 250;
-				// 	character1.root.userData.name="Ppe";
-				// 	scene.add( character1.root );
-
-				// 	objects.push(character1.root);
-				// 	objects.push(character1.root);
-
-				// };
-
-				// baseCharacter.loadParts( configOgro );
+					avatar = new THREE.Group();
+					avatar.add( head );
+					avatar.add( body );
+					initPose();
+				} );
 			}
 
-			function initGround(){
-				const gt = new THREE.TextureLoader().load( './vendor/mrdoob/three.js/examples/textures/terrain/grasslight-big.jpg' );
-				const gg = new THREE.PlaneGeometry( mapSize, mapSize );
-				const gm = new THREE.MeshPhongMaterial( { color: 0xffffff, map: gt } );
+			function initPose(){
+				var face = 0;
+				var all = {}
+				// loader.load( './vendor/mrdoob/three.js/examples/models/gltf/Soldier.glb', function ( gltf ) {
+				loader.load( './models/glb/FemalePose.glb', function ( gltf ) {
+				// loader.load( './models/glb/Runningx24.glb', function ( gltf ) {
 
-				ground = new THREE.Mesh( gg, gm );
-				ground.rotation.x = - Math.PI / 2;
-				ground.material.map.repeat.set( 64, 64 );
-				ground.material.map.wrapS = THREE.RepeatWrapping;
-				ground.material.map.wrapT = THREE.RepeatWrapping;
-				ground.material.map.encoding = THREE.sRGBEncoding;
-				// note that because the ground does not cast a shadow, .castShadow is left false
-				ground.receiveShadow = true;
+					gltf.scene.traverse( function ( object ) {
+						var b = SkeletonUtils.getBoneByName(object.name,body.children[0].children[1].skeleton);
+						if (b) {
+							b.position.copy(object.position);
+							b.rotation.copy(object.rotation);
+							b.scale.copy(object.scale);
+						}
+					} );					
+				} );
+				initPelo();
+			}			
 
-				scene.add( ground );
-				worldBox.setFromObject(ground);
+			function initPelo(){
+				var face = 0;
+				var all = {}
+				// loader.load( './vendor/mrdoob/three.js/examples/models/gltf/Soldier.glb', function ( gltf ) {
+				loader.load( './models/glb/1627915229-hair-19.glb', function ( gltf ) {
+				// loader.load( './models/glb/Runningx24.glb', function ( gltf ) {					
+					pelo = gltf.scene;
+					pelo.position.x = head.position.x;
+					pelo.position.y = head.position.y;
+					pelo.position.z = head.position.z;
+
+					pelo.children[0].material.color.r = colorPelo.r;
+					pelo.children[0].material.color.g = colorPelo.g;
+					pelo.children[0].material.color.b = colorPelo.b;
+					// console.log(pelo)
+					// pelo.scale.multiplyScalar(9);
+					avatar.add(pelo)
+					scene.add( avatar );
+					console.log(avatar)
+					// saveFile();
+				} );				
 			}
-			//EVENT HANDLERS
+
+			function saveFile(){				
+				const exporter = new GLTFExporter();
+				exporter.parse(
+					avatar,
+					function (result) {
+						saveArrayBuffer(result, 'scene.gltf');
+					},
+					{ binary: true,	trs:true, includeCustomExtensions: true,forceIndices:1 }
+				);
+			}
+
+			function saveArrayBuffer(buffer, filename) {
+				save(new Blob([buffer], { type: 'application/octet-stream' }), filename);
+			}
+
+			function save(blob, filename) {
+				const link = document.createElement('a');
+				link.style.display = 'none';
+				document.body.appendChild(link); // Firefox workaround, see #6594
+				link.href = URL.createObjectURL(blob);
+				link.download = filename;
+				link.click();
+
+				// URL.revokeObjectURL( url ); breaks Firefox...
+			}
 
 			function initEvents(){
 				window.addEventListener( 'resize', onWindowResize );
-				// document.addEventListener( 'keydown', onKeyDown );
-				// document.addEventListener( 'keyup', onKeyUp );
-				document.addEventListener( 'pointermove', updatePosCursor );
-				document.addEventListener( 'click', event=>{} );
-
-				// document.addEventListener( 'pointerdown', restorePosCursor );
-				document.addEventListener( 'keydown', onKeyDown );
-				document.addEventListener( 'keyup', onKeyUp );
 			}
 
-			const getNewPointOnVector = (p1, p2) => {
-				let distAway = cameraControls.minDistance;
-				let vector = {x: p2.x - p1.x, y: p2.y - p1.y, z:p2.z - p1.z};
-				let vl = Math.sqrt(Math.pow(vector.x, 2) + Math.pow(vector.y, 2) + Math.pow(vector.z, 2));
-				let vectorLength = {x: vector.x/vl, y: vector.y/vl, z: vector.z/vl};
-				let v = {x: distAway * vectorLength.x, y: distAway * vectorLength.y, z: distAway * vectorLength.z};
-				return {x: p2.x + v.x, y: p2.y + v.y, z: p2.z + v.z};
-			}
-
-			function updatePosCursor(event){
-				// console.log(mixers._root.position)
-				if(event.buttons){
-					var angle = getNewPointOnVector(cameraControls.object.position,mixers._root.position);
-					camera.lookAt(angle.x,angle.y,angle.z);
-				}
-				
-			}
-			
 			function onWindowResize() {
 
 				SCREEN_WIDTH = window.innerWidth;
@@ -804,156 +396,7 @@ if(!$cid){
 
 			}
 
-			function onKeyDown( event ) {
-				// console.log(event)
-				switch ( event.code ) {
-
-					case 'ArrowUp':
-					case 'KeyW': controlsAll.moveForward = true; break;
-					case 'KeyE': 
-						controlsAll.moveForward = true; 
-						controlsAll.crouch = true; 
-					break;
-
-					case 'ArrowDown':
-					case 'KeyS': 
-						// controlsAll.moveBackward = true; 
-						// goinBack = true;
-					break;
-
-					case 'ArrowLeft':
-					case 'KeyA': controlsAll.moveLeft = true; break;
-
-					case 'ArrowRight':
-					case 'KeyD': controlsAll.moveRight = true; break;
-
-					case 'KeyC': controlsAll.crouch = true; break;
-					case 'Space': controlsAll.jump = true; break;
-					case 'ControlLeft':
-					case 'ControlRight': controlsAll.attack = true; break;
-
-				}
-				// intersections();
-			}
-
-			function onKeyUp( event ) {
-
-				switch ( event.code ) {
-
-					case 'ArrowUp':
-					case 'KeyW': controlsAll.moveForward = false; break;
-
-					case 'KeyE': 
-						controlsAll.moveForward = false; 
-						controlsAll.crouch = false; 
-					break;
-
-					case 'ArrowDown':
-					case 'KeyS': 
-						// controlsAll.moveBackward = false; 
-						// goinBack = false;
-						break;
-
-					case 'ArrowLeft':
-					case 'KeyA': controlsAll.moveLeft = false; break;
-
-					case 'ArrowRight':
-					case 'KeyD': controlsAll.moveRight = false; break;
-
-					case 'KeyC': controlsAll.crouch = false; break;
-					case 'Space': controlsAll.jump = false; break;
-					case 'ControlLeft':
-					case 'ControlRight': controlsAll.attack = false; break;
-
-				}
-				sendPosition(clock.getDelta());
-			}
-
-			function updateMovementModel( delta,el,controls ) {
-
-				function exponentialEaseOut( k ) {
-
-					return k === 1 ? 1 : - Math.pow( 2, - 10 * k ) + 1;
-
-				}
-
-				var obj = el._root.userData;
-				// speed based on controls
-				var runWalk = controls.crouch?2:1;
-				if ( controls.crouch ) 	obj.maxSpeed = obj.crouchSpeed;
-				else obj.maxSpeed = obj.walkSpeed;
-
-				obj.maxReverseSpeed = - obj.maxSpeed;
-
-				if ( controls.moveForward ) obj.speed = THREE.MathUtils.clamp( obj.speed + delta * obj.frontAcceleration, obj.maxReverseSpeed, obj.maxSpeed );
-				else obj.speed = 0;
-				if ( controls.moveBackward ) obj.speed = THREE.MathUtils.clamp( obj.speed - delta * obj.backAcceleration, obj.maxReverseSpeed, obj.maxSpeed );
-
-				// orientation based on controls
-				// (don't just stand while turning)
-
-				const dir = 1;
-
-				if ( controls.moveLeft ) {
-
-					obj.bodyOrientation += delta * obj.angularSpeed;
-					obj.speed = THREE.MathUtils.clamp( obj.speed + dir * delta * obj.frontAcceleration, obj.maxReverseSpeed, obj.maxSpeed );
-
-				}
-
-				if ( controls.moveRight ) {
-
-					obj.bodyOrientation -= delta * obj.angularSpeed;
-					obj.speed = THREE.MathUtils.clamp( obj.speed + dir * delta * obj.frontAcceleration, obj.maxReverseSpeed, obj.maxSpeed );
-
-				}
-
-				// speed decay
-
-				if ( ! ( controls.moveForward || controls.moveBackward ) ) {
-
-					if ( obj.speed > 0 ) {
-
-						const k = exponentialEaseOut( obj.speed / obj.maxSpeed );
-						obj.speed = THREE.MathUtils.clamp( obj.speed - k * delta * obj.frontDecceleration, 0, obj.maxSpeed );
-
-					} else {
-
-						const k = exponentialEaseOut( obj.speed / obj.maxReverseSpeed );
-						obj.speed = THREE.MathUtils.clamp( obj.speed + k * delta * obj.backAcceleration, obj.maxReverseSpeed, 0 );
-
-					}
-
-				}
-
-				// displacement
-
-				const forwardDelta = obj.speed * delta;
-
-				el._root.position.x += Math.sin( obj.bodyOrientation ) * forwardDelta ;
-				el._root.position.z += Math.cos( obj.bodyOrientation ) * forwardDelta ;
-
-				if(obj.speed>0){
-					if(!obj.animations[runWalk].isRunning()){
-						obj.animations[0].stop();
-					}
-					if(runWalk==2){
-						obj.animations[2].play();
-					}else{
-						obj.animations[1].play();
-					}
-				}else{
-					if(obj.animations[runWalk].isRunning()){
-						obj.animations[0].play();
-					}					
-					obj.animations[2].stop();					
-					obj.animations[1].stop();
-				}
-				
-				el._root.rotation.y = obj.bodyOrientation;
-
-			}
-
+			
 			function animate() {
 				requestAnimationFrame( animate );
 				
@@ -965,44 +408,6 @@ if(!$cid){
 
 			function render() {
 
-				const delta = clock.getDelta();		
-				
-				if(mixers){
-					mixers.update( delta );
-					updateMovementModel(delta,mixers,controlsAll);
-				}
-				if(playerCollider)	{	
-					updatePlayer(delta);
-					setLimitWorld(worldBox);
-				}
-
-				// character.update( delta );
-				
-				var us = Object.values(userList);
-				// console.log(us);
-				for(var i=0;i<us.length;i++){
-					if(us[i]!="w"){
-						us[i].update( delta );
-					}
-				}
-			}
-
-			function setLimitWorld(box){
-				if(mixers._root.position.x > box.max.x){
-					mixers._root.position.x = box.max.x;
-				}
-
-				if(mixers._root.position.x < box.min.x){
-					mixers._root.position.x = box.min.x;
-				}
-
-				if(mixers._root.position.z > box.max.z){
-					mixers._root.position.z = box.max.z;
-				}
-
-				if(mixers._root.position.z < box.min.z){
-					mixers._root.position.z = box.min.z;
-				}
 			}
 
 		</script>
