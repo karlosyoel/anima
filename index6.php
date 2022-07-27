@@ -31,12 +31,12 @@
 			import { OrbitControls } from './vendor/mrdoob/three.js/examples/jsm/controls/OrbitControls.js';
 
 			// Heightfield parameters
-			const terrainWidthExtents = 200;
-			const terrainDepthExtents = 200;
-			const terrainWidth = 256;
-			const terrainDepth = 256;
-			const terrainHalfWidth = terrainWidth / 2;
-			const terrainHalfDepth = terrainDepth / 2;
+			var terrainWidthExtents = 200;
+			var terrainDepthExtents = 200;
+			var terrainWidth = 256;
+			var terrainDepth = 256;
+			var terrainHalfWidth = terrainWidth / 2;
+			var terrainHalfDepth = terrainDepth / 2;
 			const terrainMaxHeight = 10;
 			const terrainMinHeight = - 4;
 
@@ -61,7 +61,7 @@
 			let time = 0;
 			const objectTimePeriod = 3;
 			let timeNextSpawn = time + objectTimePeriod;
-			const maxNumObjects = 10;
+			const maxNumObjects = 50;
 
 			Ammo().then( function ( AmmoLib ) {
 
@@ -74,8 +74,10 @@
 
 			function init() {
 
-				heightData = generateHeight( terrainWidth, terrainDepth, terrainMinHeight, terrainMaxHeight );
-
+				// heightData = generateHeight( terrainWidth, terrainDepth, terrainMinHeight, terrainMaxHeight );
+				// console.log(heightData);
+				heightData = generateHeightPoints();
+				// console.log(heightData);
 				initGraphics();
 
 				initPhysics();
@@ -97,7 +99,7 @@
 				stats.domElement.style.top = '0px';
 				container.appendChild( stats.domElement );
 
-				camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 0.2, 2000 );
+				camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 0.2, 10000 );
 
 				scene = new THREE.Scene();
 				scene.background = new THREE.Color( 0xbfd1e5 );
@@ -128,14 +130,16 @@
 				terrainMesh = new THREE.Mesh( geometry, groundMaterial );
 				terrainMesh.receiveShadow = true;
 				terrainMesh.castShadow = true;
-
+				terrainMesh.scale.multiplyScalar(2);
 				scene.add( terrainMesh );
+				terrainMesh.position.set( 0, -6, 0 );
 
 				const textureLoader = new THREE.TextureLoader();
-				textureLoader.load( './vendor/mrdoob/three.js/examples/textures/grid.png', function ( texture ) {
+				textureLoader.load( './maps/map.png', function ( texture ) {
 					texture.wrapS = THREE.RepeatWrapping;
 					texture.wrapT = THREE.RepeatWrapping;
-					texture.repeat.set( terrainWidth - 1, terrainDepth - 1 );
+					texture.side = THREE.DoubleSide;
+					// texture.repeat.set( terrainWidth - 1, terrainDepth - 1 );
 					groundMaterial.map = texture;
 					groundMaterial.needsUpdate = true;
 				} );
@@ -164,12 +168,9 @@
 			}
 
 			function onWindowResize() {
-
 				camera.aspect = window.innerWidth / window.innerHeight;
 				camera.updateProjectionMatrix();
-
 				renderer.setSize( window.innerWidth, window.innerHeight );
-
 			}
 
 			function initPhysics() {
@@ -181,7 +182,7 @@
 				broadphase = new Ammo.btDbvtBroadphase();
 				solver = new Ammo.btSequentialImpulseConstraintSolver();
 				physicsWorld = new Ammo.btDiscreteDynamicsWorld( dispatcher, broadphase, solver, collisionConfiguration );
-				physicsWorld.setGravity( new Ammo.btVector3( 0, - 6, 0 ) );
+				physicsWorld.setGravity( new Ammo.btVector3( 0, - 9.8, 0 ) );
 
 				// Create the terrain body
 
@@ -189,7 +190,7 @@
 				const groundTransform = new Ammo.btTransform();
 				groundTransform.setIdentity();
 				// Shifts the terrain, since bullet re-centers it on its bounding box.
-				groundTransform.setOrigin( new Ammo.btVector3( 0, ( terrainMaxHeight + terrainMinHeight ) / 2, 0 ) );
+				groundTransform.setOrigin( new Ammo.btVector3( 0, 0, 0 ) );
 				const groundMass = 0;
 				const groundLocalInertia = new Ammo.btVector3( 0, 0, 0 );
 				const groundMotionState = new Ammo.btDefaultMotionState( groundTransform );
@@ -198,6 +199,41 @@
 
 				transformAux1 = new Ammo.btTransform();
 
+			}
+
+			function generateHeightPoints() {
+				var img = new Image();
+				// img.onload = run;
+				img.src = './maps/heightmap.png';
+
+				var ctx = document.createElement("canvas").getContext("2d"); //using 2d canvas to read image
+				ctx.canvas.width = img.width;
+				ctx.canvas.height = img.height;
+				ctx.drawImage(img, 0, 0);
+				var imgData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+				// console.log(imgData)
+				terrainWidth = imgData.width - 1;
+				terrainDepth = imgData.height - 1;
+
+				// terrainHalfWidth = terrainWidth / 2;
+				// terrainHalfDepth = terrainDepth / 2;
+
+				// terrainWidthExtents = terrainWidth - 50;
+				// terrainDepthExtents = terrainDepth - 50;
+
+				const size = terrainWidth * terrainDepth;
+				const data = new Float32Array( size );
+				var p = 0;
+				for (var z = 0; z <= terrainDepth; ++z) {
+					for (var x = 0; x <= terrainWidth; ++x) {
+						var offset = (z * imgData.width + x) * 4;
+						var height = imgData.data[offset] * 15 / 255;
+						data[p] = height;//(x, height, z);
+						p ++;
+					}
+				}
+				return data;
 			}
 
 			function generateHeight( width, depth, minHeight, maxHeight ) {
@@ -278,7 +314,7 @@
 					terrainWidth,
 					terrainDepth,
 					ammoHeightData,
-					heightScale,
+					heightScale*2,
 					terrainMinHeight,
 					terrainMaxHeight,
 					upAxis,
@@ -289,7 +325,7 @@
 				// Set horizontal scale
 				const scaleX = terrainWidthExtents / ( terrainWidth - 1 );
 				const scaleZ = terrainDepthExtents / ( terrainDepth - 1 );
-				heightFieldShape.setLocalScaling( new Ammo.btVector3( scaleX, 1, scaleZ ) );
+				heightFieldShape.setLocalScaling( new Ammo.btVector3( scaleX*2, 1*2, scaleZ*2 ) );
 
 				heightFieldShape.setMargin( 0.05 );
 
@@ -346,7 +382,7 @@
 
 				}
 
-				threeObject.position.set( ( Math.random() - 0.5 ) * terrainWidth * 0.6, terrainMaxHeight + objectSize + 2, ( Math.random() - 0.5 ) * terrainDepth * 0.6 );
+				threeObject.position.set( ( Math.random() - 0.5 ) * 250 * 0.6, terrainMaxHeight + objectSize + 2, ( Math.random() - 0.5 ) * 250 * 0.6 );
 
 				const mass = objectSize * 5;
 				const localInertia = new Ammo.btVector3( 0, 0, 0 );
@@ -426,11 +462,8 @@
                         // console.log(p.y(),p.x(),p.z())
 						objThree.position.set( p.x(), p.y(), p.z() );
 						objThree.quaternion.set( q.x(), q.y(), q.z(), q.w() );
-
 					}
-
 				}
-
 			}
 
 		</script>

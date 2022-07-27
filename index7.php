@@ -19,7 +19,7 @@
 			}
 		</script>
         <script async src="./otros/es-module-shims.js"></script>
-
+        
         <script type="module">
             import * as THREE from "three";
 
@@ -31,8 +31,6 @@
             //avatar
             import { GLTFLoader } from './vendor/mrdoob/three.js/examples/jsm/loaders/GLTFLoader.js';
             import * as SkeletonUtils from './vendor/mrdoob/three.js/examples/jsm/utils/SkeletonUtils.js';
-            //map
-            import { fragmentShader,vertexShader } from './otros/ShaderTerrain.js';
 
             //variable declaration section
             var physicsWorld, scene, camera, renderer, rigidBodies = [], tmpTrans = null,tmpMS;
@@ -46,8 +44,8 @@
 
             var clock;
             let terrainMesh;
-            const terrainWidth = 256;
-			const terrainDepth = 256;
+            var terrainWidth = 256;
+			var terrainDepth = 256;
             let container, stats;
             var gyro,light,cameraControls;
             var mixers = {};
@@ -55,7 +53,7 @@
             const loader = new GLTFLoader();
             var gltfMain;
             var avatarMoving = false;
-            var avatarScale = 3;
+            var avatarScale = 1;
             var physicsBody;
             var playerCollider;
             var characterLastPosition = new THREE.Vector3();
@@ -78,13 +76,25 @@
             var root;
             var _urlAvatar = "https://d1a370nemizbjq.cloudfront.net/c4630e2f-fa54-4e8a-9537-0aab3e45b76f.glb";
             var _last_position;
-            let raycaster;
-            const objects = [];
+            let raycaster,raycaster1;
+            var objects = [];
             var userList = [];
             var worldBox = new THREE.Box3();
             const gravityConstant = - 9.8;
+
             var avatarMass = 60;
-            var worldScale = 30;
+            var worldScale = 8;
+
+            const terrainWidthExtents = 200;
+			const terrainDepthExtents = 200;
+			const terrainHalfWidth = terrainWidth / 2;
+			const terrainHalfDepth = terrainDepth / 2;
+			const terrainMaxHeight = 10;
+			const terrainMinHeight = - 4;
+            var heightData,transformAux1,ammoHeightData;
+
+            //edit terrain
+            var vector2,vector3;
 
             Ammo().then( function ( AmmoLib ) {
 				Ammo = AmmoLib;
@@ -92,21 +102,55 @@
 			});
 
             function start (){
+                vector2 = new THREE.Vector2();
+                vector3 = new THREE.Vector3();
+                
+                // generateHeightPoints();
+                loadVMap();
 
                 tmpTrans = new Ammo.btTransform();
                 ammoTmpPos = new Ammo.btVector3();
                 ammoTmpQuat = new Ammo.btQuaternion();
                 tmpMS = new Ammo.btDefaultMotionState( tmpTrans );
 
-                setupPhysicsWorld();
-
                 setupGraphics();
-                // createBlock();
-                loadMap();
                 // createKinematicBox();
 
                 initEvents();                
             }
+            
+            function generateHeightPoints() {
+				var img = new Image();
+				img.src = './maps/heightmap.png';
+                
+                img.onload = ()=>{
+                    var ctx = document.createElement("canvas").getContext("2d");
+                    ctx.canvas.width = img.width;
+                    ctx.canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    var imgData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+                    terrainWidth = imgData.width - 1;
+                    terrainDepth = imgData.height - 1;
+
+                    const size = terrainWidth * terrainDepth;
+                    const data = new Float32Array( size );
+                    var p = 0;
+
+                    for (var z = 0; z <= terrainDepth; z++) {
+                        for (var x = 0; x <= terrainWidth; x++) {
+                            var offset = (z * terrainWidth + x) * 4;
+                            var height = imgData.data[offset] * 5 / 200;//255
+
+                            data[p] = height;//(x, height, z);
+                            p ++;
+                        }
+                    }
+                    heightData = data;
+                    setupPhysicsWorld();
+                    loadMap();
+                }				
+			}
 
             function initBody() {
                 return _urlAvatar ? loadEl(_urlAvatar, 1) : false;
@@ -155,15 +199,15 @@
 
                 }
 
-                root.position.x = 0//p?p.x:0;
-                root.position.z = 0//p?p.z:50;
-                root.position.y = 100//p?(p.y>0?p.y:300):450;
+                root.position.x = p?p.x:0;
+                root.position.z = p?p.z:50;
+                root.position.y = p?(p.y>0?p.y:300):450;
 
                 root.userData.animationFPS = 6;
                 root.userData.transitionFrames = 15;
 
                 // movement model parameters
-                root.userData.maxSpeed = 16 + avatarScale;
+                root.userData.maxSpeed = 2 + avatarScale;
                 root.userData.maxReverseSpeed = - 105;
                 root.userData.frontAcceleration = 600;
                 root.userData.backAcceleration = 600;
@@ -172,7 +216,7 @@
                 root.userData.speed = 0;
                 root.userData.bodyOrientation = p ? p.dir : root.rotation.y;
                 root.userData.walkSpeed = root.userData.maxSpeed;
-                root.userData.crouchSpeed = root.userData.walkSpeed + 40 + (avatarScale);
+                root.userData.crouchSpeed = root.userData.walkSpeed + 4 + (avatarScale);
                 root.userData.animations = [anima1, anima2, anima3];
 
                 root.receiveShadow = false;
@@ -194,38 +238,41 @@
             }
 
             function addElement(threeObject){
-				scale = {x:threeObject.scale.x, y:threeObject.scale.y+avatarScale, z:threeObject.scale.z}
-				let boxGeometry = new THREE.SphereGeometry(scale.x,avatarScale,avatarScale);
+                scale = {x:threeObject.scale.x, y:threeObject.scale.y+avatarScale, z:threeObject.scale.z}
+                let boxGeometry = new THREE.SphereGeometry(scale.x,avatarScale,avatarScale);
 				let edges = new THREE.EdgesGeometry(boxGeometry);
 				opObject = new THREE.LineSegments( edges, new THREE.LineBasicMaterial({ color: 0x0000ff }));
 
 				opObject.position.set(threeObject.position.x, threeObject.position.y+avatarScale, threeObject.position.z);
 				var quat = new THREE.Quaternion()
 				threeObject.getWorldQuaternion( quat ); 
-				// scene.add(opObject);
-
-				tmpTrans.setIdentity();
-				tmpTrans.setOrigin( new Ammo.btVector3( opObject.position.x, opObject.position.y, opObject.position.z ) );
-    			tmpTrans.setRotation( new Ammo.btQuaternion( quat.x, quat.y, quat.z, quat.w ) );
-                var motionState = new Ammo.btDefaultMotionState( tmpTrans );
-
-				// let colShape = new Ammo.btBoxShape( new Ammo.btVector3( scale.x , scale.y , scale.z  ) );
+                
 				let colShape = new Ammo.btSphereShape(scale.x);
     			colShape.setMargin( 0.05 );
 
 				let localInertia = new Ammo.btVector3( 0, 0, 0 );
     			colShape.calculateLocalInertia( avatarMass, localInertia );
 
-				let rbInfo = new Ammo.btRigidBodyConstructionInfo( avatarMass, motionState, colShape, localInertia );
-    			let body = new Ammo.btRigidBody( rbInfo );
-				body.setFriction(1);
+				const transform = new Ammo.btTransform();
+				transform.setIdentity();
+				const pos = threeObject.position;
+				transform.setOrigin( new Ammo.btVector3( pos.x, pos.y, pos.z ) );
+
+				const motionState = new Ammo.btDefaultMotionState( transform );
+				const rbInfo = new Ammo.btRigidBodyConstructionInfo( avatarMass, motionState, colShape, localInertia );
+				const body = new Ammo.btRigidBody( rbInfo );
+                body.setFriction(1);
                 body.setAngularFactor( 0, 0, 0 );
                 body.setActivationState(STATE.DISABLE_DEACTIVATION);
 
-				physicsWorld.addRigidBody( body );
-
 				threeObject.userData.physicsBody = body;
-                rigidBodies.push(threeObject);
+
+				threeObject.receiveShadow = true;
+				threeObject.castShadow = true;
+
+                dynamicObjects.push( threeObject );
+				physicsWorld.addRigidBody( body );
+				// scene.add( threeObject );
 			}
 
             function onWindowResize() {
@@ -234,172 +281,135 @@
                 camera.updateProjectionMatrix();
             }
 
-            function Terrain() {
-                // Load the heightmap image
-                const textureLoader = new THREE.TextureLoader();
-                textureLoader.load( './maps/heightmap.png', function ( heightmap ) {
-                    heightmap.wrapS = THREE.RepeatWrapping;
-                    heightmap.wrapT = THREE.RepeatWrapping;
-                    textureLoader.load( './maps/map.png', function ( texture ) {
-                        texture.wrapS = THREE.RepeatWrapping;
-                        texture.wrapT = THREE.RepeatWrapping;
-                        texture.repeat.set( 1, 1 );
-                        var material = new THREE.MeshStandardMaterial( {
-                            // color: 0xfff888,
-                            // roughness: settings.roughness,
-                            // metalness: settings.metalness,
-
-                            map: texture,
-                            // normalScale: new THREE.Vector2( 1, - 1 ), // why does the normal map require negation in this case?
-
-                            // aoMap: aoMap,
-                            // aoMapIntensity: 1,
-
-                            displacementMap: heightmap,
-                            displacementScale: 50,
-                            displacementBias: 0, // from original model
-
-                            // envMap: reflectionCube,
-                            // envMapIntensity: settings.envMapIntensity,
-
-                            side: THREE.DoubleSide
-
-                        } );
-                        material.needsUpdate = true;
-
-
-                        var geometryTerrain = new THREE.PlaneGeometry(1024, 1024, 256, 256);
-                        geometryTerrain.uvsNeedUpdate = true;
-                        geometryTerrain.buffersNeedUpdate = true;
-                        geometryTerrain.computeVertexNormals();
-                        geometryTerrain.attributes.position.needsUpdate = true;
-                        geometryTerrain.attributes.normal.needsUpdate = true;
-
-                        terrainMesh = new THREE.Mesh(geometryTerrain, material);
-                        terrainMesh.position.set(0, 0, 0);
-                        terrainMesh.rotation.x = -Math.PI / 2;
-                        terrainMesh.scale.multiplyScalar(1);
-
-                        terrainMesh.material.map = texture;
-                        terrainMesh.material.needsUpdate = true;
-                        // add the terrain
-                        scene.add(terrainMesh);
-
-                        addPlane(terrainMesh,1);
-                    }) 
-                });
+            function loadVMap(map='maps/map00.json'){
+                var loader = new THREE.FileLoader();
+                loader.load(map,function(json){
+                    heightData = JSON.parse(json).data;
+                    setupPhysicsWorld();
+                    loadMap();
+                });    
             }
 
             function loadMap() {
-                return Terrain();
-                // return loadMap1();
-                // Load the heightmap image
-                const textureLoader = new THREE.TextureLoader();
-                textureLoader.load( './maps/heightmap.png', function ( heightmap ) {
-                    heightmap.encoding = THREE.sRGBEncoding;
-                    heightmap.wrapS = THREE.RepeatWrapping;
-                    heightmap.wrapT = THREE.RepeatWrapping;
-                    heightmap.anisotropy = 16;
+                const geometry = new THREE.PlaneGeometry( terrainWidthExtents, terrainDepthExtents, terrainWidth - 1, terrainDepth - 1 );
+				geometry.rotateX( - Math.PI / 2 );
+				const vertices = geometry.attributes.position.array;
+                // console.log(vertices.length)
+                // console.log(heightData.length)
+				for ( let i = 0, j = 0, l = vertices.length; i < l; i ++, j += 3 ) {
+					vertices[ j + 1 ] = heightData[ i ];
+				}
+				geometry.computeVertexNormals();
 
-                    textureLoader.load( './maps/map.png', function ( texture ) {
-                        texture.encoding = THREE.sRGBEncoding;
-                        texture.wrapS = THREE.RepeatWrapping;
-                        texture.wrapT = THREE.RepeatWrapping;
-                        texture.anisotropy = 16;
+				const groundMaterial = new THREE.MeshPhongMaterial( { color: 0xC7C7C7 } );
+                groundMaterial.side = THREE.DoubleSide;
+                groundMaterial.displacementScale = 2;
+                groundMaterial.roughness = 0;
 
-                        var uniforms={
-                            bumpTexture: { value: heightmap },
-                            bumpScale: { value: 10 },
-                            terrainTexture: { value: texture }
-                        }
+				terrainMesh = new THREE.Mesh( geometry, groundMaterial );
+				terrainMesh.receiveShadow = true;
+				terrainMesh.castShadow = true;
+				terrainMesh.scale.multiplyScalar(worldScale);
+                terrainMesh.name = "ground";
+				scene.add( terrainMesh );
+				terrainMesh.position.set( 0, -(worldScale*3)+1, 0 );
 
-                        var material = new THREE.ShaderMaterial({
-                            uniforms:uniforms,
-                            vertexShader:vertexShader,
-                            fragmentShader:fragmentShader,
-                            fog:false,
-                            wireframe: false,
-                            side: THREE.DoubleSide
-                        });
-
-                        var geometryTerrain = new THREE.PlaneGeometry(255, 255, 255, 255);
-                        geometryTerrain.computeVertexNormals();
-                        geometryTerrain.computeTangents();
-                        // console.log(geometryTerrain)
-                        var terrainMesh1 = new THREE.Mesh(geometryTerrain, material);
-                        
-
-                        const groundMaterial = new THREE.MeshBasicMaterial( { 
-                            wireframe: true,
-                            map: texture
-                         } );
-                        groundMaterial.side = THREE.DoubleSide;
-                        terrainMesh = new THREE.Mesh( terrainMesh1.geometry, groundMaterial );
-                        
-                        terrainMesh.position.set(0, 0, 0);
-                        terrainMesh.rotation.x = -Math.PI / 2;
-                        terrainMesh.receiveShadow = true;
-                        terrainMesh.castShadow = true;
-                        terrainMesh.scale.multiplyScalar(avatarScale);
-
-                        scene.add(terrainMesh);
-
-                        addPlane(terrainMesh,avatarScale);
-                    });
-                });
+				const textureLoader = new THREE.TextureLoader();
+				textureLoader.load( './maps/map.png', function ( texture ) {
+					texture.wrapS = THREE.RepeatWrapping;
+					texture.wrapT = THREE.RepeatWrapping;
+					// texture.side = THREE.DoubleSide;
+					groundMaterial.map = texture;
+					groundMaterial.needsUpdate = true;
+				} );
+                
+                initBody();
+                initTrees();
+                return;
             }
 
-            function addPlane(object,scalingFactor=1){
-                var pos = {x: 0, y: 0, z: 0};
-                var scale = {x: scalingFactor, y: scalingFactor, z: scalingFactor};
-                var quat = {x: 0, y: 0, z: 0, w: 1};
-                var mass = 0;
+            function initTrees(){
+                new OBJLoader().load("tree/new/tree.obj", function (object) {
+                    const groundMaterial = new THREE.MeshPhongMaterial( { color: 0xC7C7C7,side:THREE.DoubleSide } );
+                    groundMaterial.side = THREE.DoubleSide;
+                    var tree = new THREE.Mesh( object.children[0].geometry, groundMaterial );
+                    tree.position.set(0,0,0);
+                    tree.scale.multiplyScalar(avatarScale);
+                    scene.add(tree)
+                    tree.name="tree";
+                    // console.log(object);
 
-                const quat1 = new THREE.Quaternion();
-				var transform = new Ammo.btTransform();
-                transform.setIdentity();
-                transform.setOrigin( new Ammo.btVector3( pos.x, pos.y, pos.z ) );
-                transform.setRotation( new Ammo.btQuaternion( quat1.x, quat1.y, quat1.z, quat1.w ) );
-                var motionState = new Ammo.btDefaultMotionState( transform );
-
-				let triangles = [];
-
-				const mesh = new Ammo.btTriangleMesh(true, true);
-                // console.log(object.geometry.attributes.position.array)
-                var vertexPositionArray = object.geometry.attributes.position.array;
-				for (let i = 0; i < object.geometry.attributes.position.count/3; i++) {
-					mesh.addTriangle(
-						new Ammo.btVector3(vertexPositionArray[i*9+0]*scalingFactor, vertexPositionArray[i*9+1]*scalingFactor, vertexPositionArray[i*9+2]*scalingFactor ),
-                        new Ammo.btVector3(vertexPositionArray[i*9+3]*scalingFactor, vertexPositionArray[i*9+4]*scalingFactor, vertexPositionArray[i*9+5]*scalingFactor),
-                        new Ammo.btVector3(vertexPositionArray[i*9+6]*scalingFactor, vertexPositionArray[i*9+7]*scalingFactor, vertexPositionArray[i*9+8]*scalingFactor),
-                        false
-					);
-				}
-				// console.log(vertexPositionArray)
-				const colShape = new Ammo.btBvhTriangleMeshShape(mesh,true,true);
-                colShape.setMargin( 0.05 );
-				var localInertia = new Ammo.btVector3( 0, 0, 0 );
-                colShape.calculateLocalInertia( mass, localInertia );
-
-				const rbInfo = new Ammo.btRigidBodyConstructionInfo(mass, motionState, colShape, localInertia);
-				const body = new Ammo.btRigidBody(rbInfo);
-                // console.log(body)
-                // body.setFriction(10000000);
-                // body.setRollingFriction(0);
-				physicsWorld.addRigidBody(body);
-                initBody();
-                // 
-			}
+                })
+            }
 
             function setupPhysicsWorld(){
-                const collisionConfiguration = new Ammo.btSoftBodyRigidBodyCollisionConfiguration();
-                const dispatcher = new Ammo.btCollisionDispatcher( collisionConfiguration );
-                const broadphase = new Ammo.btDbvtBroadphase();
-                const solver = new Ammo.btSequentialImpulseConstraintSolver();
-                const softBodySolver = new Ammo.btDefaultSoftBodySolver();
-                physicsWorld = new Ammo.btSoftRigidDynamicsWorld( dispatcher, broadphase, solver, collisionConfiguration, softBodySolver );
-                physicsWorld.setGravity( new Ammo.btVector3( 0, gravityConstant, 0 ) );
+                var collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();
+				var dispatcher = new Ammo.btCollisionDispatcher( collisionConfiguration );
+				var broadphase = new Ammo.btDbvtBroadphase();
+				var solver = new Ammo.btSequentialImpulseConstraintSolver();
+				physicsWorld = new Ammo.btDiscreteDynamicsWorld( dispatcher, broadphase, solver, collisionConfiguration );
+				physicsWorld.setGravity( new Ammo.btVector3( 0, gravityConstant, 0 ) );
+
+				// Create the terrain body
+				const groundShape = createTerrainShape();
+				const groundTransform = new Ammo.btTransform();
+				groundTransform.setIdentity();
+				// Shifts the terrain, since bullet re-centers it on its bounding box.
+				groundTransform.setOrigin( new Ammo.btVector3( 0, 0, 0 ) );
+				const groundMass = 0;
+				const groundLocalInertia = new Ammo.btVector3( 0, 0, 0 );
+				const groundMotionState = new Ammo.btDefaultMotionState( groundTransform );
+				const groundBody = new Ammo.btRigidBody( new Ammo.btRigidBodyConstructionInfo( groundMass, groundMotionState, groundShape, groundLocalInertia ) );
+				physicsWorld.addRigidBody( groundBody );
+
+				transformAux1 = new Ammo.btTransform();
             }
+
+            function createTerrainShape() {
+                // const heightScale = 1;
+				const upAxis = 1;
+				const hdt = 'PHY_FLOAT';
+				const flipQuadEdges = false;
+				ammoHeightData = Ammo._malloc( 4 * terrainWidth * terrainDepth );
+                
+				let p = 0;
+				let p2 = 0;
+
+				// for ( let j = 0; j < terrainDepth; j ++ ) {
+				// 	for ( let i = 0; i < terrainWidth; i ++ ) {
+				// 		// Ammo.HEAPF32[ ammoHeightData + p2 >> 2 ] = heightData[ p ];
+				// 		p ++;
+				// 		p2 += 4;
+				// 	}
+				// }
+
+                for ( let j = 0; j < heightData.length; j ++ ) {					
+                    Ammo.HEAPF32[ ammoHeightData + p2 >> 2 ] = heightData[ j ];
+                    // p ++;
+                    p2 += 4;
+				}
+
+				// Creates the heightfield physics shape
+				const heightFieldShape = new Ammo.btHeightfieldTerrainShape(
+					terrainWidth,
+					terrainDepth,
+					ammoHeightData,
+					worldScale,
+					terrainMinHeight,
+					terrainMaxHeight,
+					upAxis,
+					hdt,
+					flipQuadEdges
+				);
+
+				// Set horizontal scale
+				const scaleX = terrainWidthExtents / ( terrainWidth );
+				const scaleZ = terrainDepthExtents / ( terrainDepth );
+				heightFieldShape.setLocalScaling( new Ammo.btVector3( scaleX*worldScale, 1*worldScale, scaleZ*worldScale ));
+
+				heightFieldShape.setMargin( 0.05 );
+				return heightFieldShape;
+			}
 
             function setupGraphics(){
                 container = document.createElement( 'div' );
@@ -476,6 +486,7 @@
                 cameraControls.update();
 
                 raycaster = new THREE.Raycaster();
+                raycaster1 = new THREE.Raycaster();
                 
                 initEvents();
             }
@@ -716,7 +727,7 @@
                 }
 
                 if (mixers._root.userData.speed != 0 || avatarMoving) {
-                    // sendPosition(deltaTime);
+                    sendPosition(deltaTime);
                 }
             }
 
@@ -802,39 +813,37 @@
                     physicsBody.getWorldTransform().setOrigin(ammoTmpPos);
                     var gr = gravityConstant*avatarMass*100;
                     ammoTmpPos1.setValue(0, gr, 0);
-                    // physicsBody.applyForce(ammoTmpPos1, ammoTmpPos);
+                    physicsBody.applyForce(ammoTmpPos1, ammoTmpPos);
                 }
             }
 
             function updatePhysics( deltaTime ){
 
-                // Step world
-                // physicsWorld.stepSimulation( deltaTime, 10 );
                 physicsWorld.stepSimulation(deltaTime, 100, 1 / 240.0);
-                // Update rigid bodies
-                for ( var i = 0; i < rigidBodies.length; i++ ) {
-                    var objThree = rigidBodies[ i ];
-                    var objAmmo = objThree.userData.physicsBody;
-                    var ms = objAmmo.getMotionState();
+                for ( let i = 0, il = dynamicObjects.length; i < il; i ++ ) {
+
+                    const objThree = dynamicObjects[ i ];
+                    const objPhys = objThree.userData.physicsBody;
+                    const ms = objPhys.getMotionState();
                     if ( ms ) {
 
-                        ms.getWorldTransform( tmpTrans );
-                        var p = tmpTrans.getOrigin();
-                        // var q = tmpTrans.getRotation();
-                        avatarMoving = p.x() !=objThree.position.x || p.y() != objThree.position.y || p.z() != objThree.position.z;
+                        ms.getWorldTransform( transformAux1 );
+                        const p = transformAux1.getOrigin();
+                        // const q = transformAux1.getRotation();
+                        // console.log(p.y(),p.x(),p.z())
                         objThree.position.set( p.x(), p.y(), p.z() );
-                        if(objThree.position.y<-100){
-                            objThree.position.y = 100;
-                            // objThree.position.x = 0;
-                            // objThree.position.z = 0;
-                        }
-                        if(avatarMoving)
-                            sendPosition(deltaTime);
                         // objThree.quaternion.set( q.x(), q.y(), q.z(), q.w() );
 
+                        avatarMoving = p.x() !=objThree.position.x || p.y() != objThree.position.y || p.z() != objThree.position.z;
+                        if(objThree.position.y<-250){
+                            objThree.position.y = 110;
+                        }
+                        
+                        if(avatarMoving){
+                            sendPosition(deltaTime);
+                        }
                     }
                 }
-
             }
 
             async function connectService() {
@@ -884,6 +893,219 @@
                 auxWs = _ws;
             }
 
+            // function Terrain1(){
+            //     const textureLoader = new THREE.TextureLoader();
+            //     textureLoader.load( './maps/heightmap.png', function ( heightmap ) {
+            //         heightmap.wrapS = THREE.RepeatWrapping;
+            //         heightmap.wrapT = THREE.RepeatWrapping;
+
+            //         heightmap.needsUpdate = true;
+            //         heightmap.needsUpdate = true;
+
+            //         textureLoader.load( './maps/map.png', function ( texture ) {
+            //             let material = new THREE.MeshPhongMaterial({
+            //                 map: texture,
+            //                 // flatShading: true,
+            //                 side: THREE.DoubleSide
+            //             });
+
+            //             let uniforms = {
+            //                 heightMap: { value: heightmap },
+            //                 texelSize: { value: 1 },
+            //                 texelMaxHeight: { value: 5 },
+            //             };
+
+            //             material.onBeforeCompile = function (shader) {
+            //                 shader.vertexShader = vertShader;
+            //                 Object.assign(shader.uniforms, uniforms);
+            //             };
+
+            //             const planeGeom = new THREE.PlaneBufferGeometry(1, 1, 256, 256);
+            //             planeGeom.rotateX(-Math.PI / 2);
+                        
+            //             let terrainMesh = new THREE.Mesh(planeGeom, material);
+                        
+            //             terrainMesh.position.x = 0;
+            //             terrainMesh.position.y = 0;
+            //             terrainMesh.position.z = 0;
+
+            //             scene.add(terrainMesh);
+            //             terrainMesh.scale.multiplyScalar(worldScale);
+            //             addPlane(terrainMesh,worldScale);
+            //         })
+            //     })
+            // }
+
+            // function Terrain() {
+            //     // createGeometryFromMap();
+            //     // Load the heightmap image
+            //     const textureLoader = new THREE.TextureLoader();
+            //     textureLoader.load( './maps/heightmap.png', function ( heightmap ) {
+            //         heightmap.wrapS = THREE.RepeatWrapping;
+            //         heightmap.wrapT = THREE.RepeatWrapping;
+            //         textureLoader.load( './maps/map.png', function ( texture ) {
+            //             texture.wrapS = THREE.RepeatWrapping;
+            //             texture.wrapT = THREE.RepeatWrapping;
+            //             texture.repeat.set( 1, 1 );
+            //             var material = new THREE.MeshStandardMaterial( {
+            //                 // color: 0xfff888,
+            //                 // roughness: settings.roughness,
+            //                 // metalness: settings.metalness,
+
+            //                 map: texture,
+            //                 // normalScale: new THREE.Vector2( 1, - 1 ), // why does the normal map require negation in this case?
+
+            //                 // aoMap: aoMap,
+            //                 // aoMapIntensity: 1,
+
+            //                 displacementMap: heightmap,
+            //                 displacementScale: 50,
+            //                 displacementBias: 0, // from original model
+
+            //                 // envMap: reflectionCube,
+            //                 // envMapIntensity: settings.envMapIntensity,
+
+            //                 side: THREE.DoubleSide
+
+            //             } );
+            //             material.needsUpdate = true;
+            //             // console.log(material);
+            //             var geometryTerrain = new THREE.PlaneGeometry(terrainWidthExtents, terrainDepthExtents, terrainWidth - 1, terrainDepth - 1);
+            //             geometryTerrain.rotateX( - Math.PI / 2 );
+            //             geometryTerrain.computeVertexNormals();
+
+            //             const groundMaterial = new THREE.MeshPhongMaterial( { color: 0xA7A7C7 } );
+            //             groundMaterial.side = THREE.DoubleSide;
+            //             groundMaterial.wireframe = false;
+            //             groundMaterial.needsUpdate = true;
+
+            //             terrainMesh = new THREE.Mesh(geometryTerrain, material);
+            //             // terrainMesh.position.set(0, 0, 0);
+            //             terrainMesh.receiveShadow = true;
+			// 	        terrainMesh.castShadow = true;
+
+            //             // terrainMesh.geometry.rotateX(Math.PI / 2);
+            //             // terrainMesh.geometry.rotateZ(Math.PI / 2);
+
+            //             // add the terrain
+            //             scene.add(terrainMesh);
+
+            //             addPlane(terrainMesh,worldScale);
+            //         }) 
+            //     });
+            // }
+
+            // function createGeometryFromMap() {
+            //     var spacingX = 3;
+            //     var spacingZ = 3;
+            //     var heightOffset = 2;
+
+            //     var canvas = document.createElement('canvas');
+            //     canvas.width = terrainWidthExtents;
+            //     canvas.height = terrainWidthExtents;
+            //     var ctx = canvas.getContext('2d');
+
+            //     var img = new Image();
+            //     img.src = "./maps/heightmap.png";
+            //     img.onload = function () {
+            //         // draw on canvas
+            //         ctx.drawImage(img, 0, 0);
+            //         var pixel = ctx.getImageData(0, 0, terrainWidthExtents, terrainDepthExtents);
+            //         console.log(pixel);
+            //         var output = [];
+            //         // console.log(Date.now())
+            //         // for (var x = 0; x < terrainDepth; x++) {
+            //         //     for (var z = 0; z < terrainWidth; z++) {
+            //         //         // get pixel
+            //         //         // since we're grayscale, we only need one element
+
+            //         //         var yValue = pixel.data[z * 4 + (terrainDepth * x * 4)] / heightOffset;
+            //         //         var vertex = new THREE.Vector3(x * spacingX, yValue, z * spacingZ);
+            //         //         heightData.push(vertex);
+            //         //     }
+            //         // }
+            //         for(var i=0;i<pixel.data.length;i++){
+            //             heightData.push(pixel.data[i]);
+            //         }
+
+            //         const geometry = new THREE.PlaneGeometry( terrainWidthExtents, terrainDepthExtents, terrainWidth - 1, terrainDepth - 1 );
+			// 	    geometry.rotateX( - Math.PI / 2 );
+            //         const vertices = geometry.attributes.position.array;
+            //         for ( let i = 0, j = 0, l = vertices.length; i < l; i ++, j += 3 ) {
+
+            //             // j + 1 because it is the y component that we modify
+            //             vertices[ j + 1 ] = heightData[ i ];
+
+            //         }
+            //         // geometry.computeVertexNormals();
+            //         const groundMaterial = new THREE.MeshPhongMaterial( { color: 0xC7C7C7 } );
+            //         terrainMesh = new THREE.Mesh( geometry, groundMaterial );
+            //         terrainMesh.receiveShadow = true;
+            //         terrainMesh.castShadow = true;
+            //         scene.add( terrainMesh );
+
+            //         console.log(heightData)
+            //         console.log(vertices)
+
+            //         // var mesh = new THREE.Mesh(geom, new THREE.MeshLambertMaterial({
+            //         //     vertexColors: THREE.FaceColors,
+            //         //     color: 0x666666,
+            //         //     shading: THREE.NoShading
+            //         // }));
+            //         // mesh.translateX(-xMax / 2);
+            //         // mesh.translateZ(-zMax / 2);
+            //         // scene.add(mesh);
+            //         // mesh.name = 'valley';
+            //     };
+
+            // }
+
+            // function createTerrainShape1() {
+			// 	// This parameter is not really used, since we are using PHY_FLOAT height data type and hence it is ignored
+			// 	const heightScale = 1;
+			// 	// Up axis = 0 for X, 1 for Y, 2 for Z. Normally 1 = Y is used.
+			// 	const upAxis = 1;
+			// 	// hdt, height data type. "PHY_FLOAT" is used. Possible values are "PHY_FLOAT", "PHY_UCHAR", "PHY_SHORT"
+			// 	const hdt = 'PHY_FLOAT';
+			// 	// Set this to your needs (inverts the triangles)
+			// 	const flipQuadEdges = false;
+			// 	// Creates height data buffer in Ammo heap
+			// 	var ammoHeightData = Ammo._malloc( 4 * terrainWidth * terrainDepth );
+			// 	// Copy the javascript height data array to the Ammo one.
+			// 	let p = 0;
+			// 	let p2 = 0;
+			// 	for ( let j = 0; j < terrainDepth; j ++ ) {
+			// 		for ( let i = 0; i < terrainWidth; i ++ ) {
+			// 			// write 32-bit float data to memory
+			// 			Ammo.HEAPF32[ ammoHeightData + p2 >> 2 ] = heightData[ p ];
+			// 			p ++;
+			// 			// 4 bytes/float
+			// 			p2 += 4;
+			// 		}
+			// 	}
+			// 	// Creates the heightfield physics shape
+			// 	const heightFieldShape = new Ammo.btHeightfieldTerrainShape(
+			// 		terrainWidth,
+			// 		terrainDepth,
+			// 		ammoHeightData,
+			// 		heightScale,
+			// 		terrainMinHeight,
+			// 		terrainMaxHeight,
+			// 		upAxis,
+			// 		hdt,
+			// 		flipQuadEdges
+			// 	);
+
+			// 	// Set horizontal scale
+			// 	const scaleX = terrainWidthExtents / ( terrainWidth - 1 );
+			// 	const scaleZ = terrainDepthExtents / ( terrainDepth - 1 );
+			// 	heightFieldShape.setLocalScaling( new Ammo.btVector3( scaleX, 1, scaleZ ) );
+
+			// 	heightFieldShape.setMargin( 0.05 );
+
+			// 	return heightFieldShape;
+
+			// }
             // function loadMap1(){
 			// 	var OBJFile = './models/obj/terrain.obj';
 			// 	var MTLFile = './models/obj/terrain.mtl';
@@ -892,27 +1114,72 @@
             //     new OBJLoader().load(OBJFile, function (object) {
             //         const groundMaterial = new THREE.MeshPhongMaterial( { color: 0xC7C7C7,side:THREE.DoubleSide } );
             //         groundMaterial.side = THREE.DoubleSide;
+            //         groundMaterial.wireframe = false;
 
-            //         terrainMesh = new THREE.Mesh( object.children[0].geometry, groundMaterial );
-            //         terrainMesh.receiveShadow = true;
-            //         terrainMesh.castShadow = true;
-            //         terrainMesh.scale.multiplyScalar(worldScale);
-            //         terrainMesh.position.y = 0;
-            //         const textureLoader = new THREE.TextureLoader();
-            //         textureLoader.load( './vendor/mrdoob/three.js/examples/textures/terrain/grasslight-big.jpg', function ( texture ) {
-            //         // textureLoader.load( './vendor/mrdoob/three.js/examples/textures/minecraft/grass_dirt.png', function ( texture ) {
-            //             texture.wrapS = THREE.RepeatWrapping;
-            //             texture.wrapT = THREE.RepeatWrapping;
-            //             texture.repeat.set( 0.5, 0.5 );
-            //             groundMaterial.map = texture;
-            //             groundMaterial.needsUpdate = true;
-            //         } );
+            //         console.log(object.children[0].geometry)
 
-            //         scene.add( terrainMesh );
+            //         // terrainMesh = new THREE.Mesh( object.children[0].geometry, groundMaterial );
+            //         // terrainMesh.receiveShadow = true;
+            //         // terrainMesh.castShadow = true;
+            //         // terrainMesh.scale.multiplyScalar(worldScale);
+            //         // terrainMesh.position.y = 0;
+            //         // const textureLoader = new THREE.TextureLoader();
+            //         // textureLoader.load( './vendor/mrdoob/three.js/examples/textures/terrain/grasslight-big.jpg', function ( texture ) {
+            //         // // textureLoader.load( './vendor/mrdoob/three.js/examples/textures/minecraft/grass_dirt.png', function ( texture ) {
+            //         //     texture.wrapS = THREE.RepeatWrapping;
+            //         //     texture.wrapT = THREE.RepeatWrapping;
+            //         //     texture.repeat.set( 0.5, 0.5 );
+            //         //     groundMaterial.map = texture;
+            //         //     groundMaterial.needsUpdate = true;
+            //         // } );
+
+            //         // scene.add( terrainMesh );
 
             //         // add plane to phys
-            //         addPlane(terrainMesh,worldScale);
+            //         // addPlane(terrainMesh,worldScale);
             //     });
+			// }
+
+            // function addPlane(object,scalingFactor=1){
+            //     var pos = {x: 0, y: 0, z: 0};
+            //     var scale = {x: scalingFactor, y: scalingFactor, z: scalingFactor};
+            //     var quat1 = {x: 0, y: 0, z: 0, w: 1};
+            //     var mass = 0;
+                
+            //     // const quat1 = new THREE.Quaternion();
+			// 	var transform = new Ammo.btTransform();
+            //     transform.setIdentity();
+            //     transform.setOrigin( new Ammo.btVector3( pos.x, pos.y, pos.z ) );
+            //     transform.setRotation( new Ammo.btQuaternion( quat1.x, quat1.y, quat1.z, quat1.w ) );
+            //     var motionState = new Ammo.btDefaultMotionState( transform );
+
+			// 	let triangles = [];
+
+			// 	const mesh = new Ammo.btTriangleMesh(true, true);
+            //     var vertexPositionArray = object.geometry.attributes.position.array;
+			// 	for (let i = 0; i < object.geometry.attributes.position.count/3; i++) {
+			// 		mesh.addTriangle(
+			// 			new Ammo.btVector3(vertexPositionArray[i*9+0]*scalingFactor, vertexPositionArray[i*9+1]*scalingFactor, vertexPositionArray[i*9+2]*scalingFactor ),
+            //             new Ammo.btVector3(vertexPositionArray[i*9+3]*scalingFactor, vertexPositionArray[i*9+4]*scalingFactor, vertexPositionArray[i*9+5]*scalingFactor),
+            //             new Ammo.btVector3(vertexPositionArray[i*9+6]*scalingFactor, vertexPositionArray[i*9+7]*scalingFactor, vertexPositionArray[i*9+8]*scalingFactor),
+            //             false
+			// 		);
+			// 	}
+			// 	// console.log(vertexPositionArray)
+			// 	const colShape = new Ammo.btBvhTriangleMeshShape(mesh,true,true);
+            //     colShape.setMargin( 0.05 );
+			// 	var localInertia = new Ammo.btVector3( 0, 0, 0 );
+            //     colShape.calculateLocalInertia( mass, localInertia );
+
+			// 	const rbInfo = new Ammo.btRigidBodyConstructionInfo(mass, motionState, colShape, localInertia);
+			// 	const body = new Ammo.btRigidBody(rbInfo);
+            //     // console.log(body);
+            //     // console.log(body.getWorldTransform())
+            //     // body.setFriction(10000000);
+            //     // body.setRollingFriction(0);
+			// 	physicsWorld.addRigidBody(body);
+            //     initBody();
+            //     // 
 			// }
 
             // function initAvatar1(){
@@ -1126,6 +1393,81 @@
 
             // }
 
+        </script>
+
+<script>
+//             const vertShader = `
+// #define PHONG
+
+// varying vec3 vViewPosition;
+// varying vec3 vNormal;
+
+// uniform sampler2D heightMap;
+// uniform float texelSize;
+// uniform float texelMaxHeight;
+
+// #include <common>
+
+// #include <uv_pars_vertex>
+// #include <uv2_pars_vertex>
+// #include <displacementmap_pars_vertex>
+// #include <envmap_pars_vertex>
+// #include <color_pars_vertex>
+// #include <fog_pars_vertex>
+// #include <morphtarget_pars_vertex>
+// #include <skinning_pars_vertex>
+// #include <shadowmap_pars_vertex>
+// #include <logdepthbuf_pars_vertex>
+// #include <clipping_planes_pars_vertex>
+
+// vec3 getNormal(vec2 uv) {
+
+//     float u = texture2D(heightMap, uv + texelSize * vec2(0.0, -1.0)).r;
+//     float r = texture2D(heightMap, uv + texelSize * vec2(-1.0, 0.0)).r;
+//     float l = texture2D(heightMap, uv + texelSize * vec2(1.0, 0.0)).r;
+//     float d = texture2D(heightMap, uv + texelSize * vec2(0.0, 1.0)).r;
+
+//     vec3 n;
+//     n.z = u - d;
+//     n.x = r - l;
+//     n.y = 1.0 / 256.0;
+//     return normalize(n);
+// }
+
+// void main() {
+
+//     #include <uv_vertex>
+//     #include <uv2_vertex>
+//     #include <color_vertex>
+
+//     #include <beginnormal_vertex>
+
+//     #include <begin_vertex>
+    
+//     vec4 height = texture2D(heightMap, vUv);
+
+
+//     vec4 worldPosition = modelMatrix * vec4(transformed, 1.0);
+//     worldPosition.y += height.r * texelMaxHeight;
+//     vec4 mvPosition = viewMatrix * worldPosition;
+
+//     objectNormal = getNormal(vUv);
+//     vec3 transformedNormal = objectNormal;
+//     transformedNormal = normalMatrix * transformedNormal;
+//     vNormal = normalize( transformedNormal );
+
+//     gl_Position = projectionMatrix * mvPosition;
+
+//     #include <logdepthbuf_vertex>
+//     #include <clipping_planes_vertex>
+
+//     vViewPosition = - mvPosition.xyz;
+// //vNormal = vec3(0.0, 0.0, 1.0);
+
+//     #include <envmap_vertex>
+//     #include <shadowmap_vertex>
+//     #include <fog_vertex>
+// }`;
         </script>
     
 </body></html>
